@@ -4,35 +4,15 @@ import Controls from './components/Controls';
 import { GRE_WORDS, WORD_DATA } from './constants';
 import { WordData } from './types';
 
-// Shuffle words with priority for unknown words
-const shuffleWords = (allWords: string[], unknown: Set<string>, known: Set<string>): string[] => {
-    const unknownList = allWords.filter(w => unknown.has(w));
-    const knownList = allWords.filter(w => known.has(w) && !unknown.has(w));
-    const neutralList = allWords.filter(w => !unknown.has(w) && !known.has(w));
-    
-    // Unknown words appear 3x more frequently than known/neutral words
-    const weightedUnknown = [...unknownList, ...unknownList, ...unknownList];
-    const combined = [...weightedUnknown, ...neutralList, ...knownList];
-    
-    // Shuffle the combined array
-    const shuffled = [...combined].sort(() => Math.random() - 0.5);
-    
-    // If we have very few words, make sure we have enough variety
-    if (shuffled.length < allWords.length) {
-      const remaining = allWords.filter(w => !shuffled.includes(w));
-      shuffled.push(...remaining);
-    }
-    
-    return shuffled.length > 0 ? shuffled : [...allWords].sort(() => Math.random() - 0.5);
-};
-
 const App: React.FC = () => {
   // Track words the user doesn't know (need more practice)
   const [unknownWords, setUnknownWords] = useState<Set<string>>(new Set());
   const [knownWords, setKnownWords] = useState<Set<string>>(new Set());
   
-  // Use a shuffled copy of words with smart repetition
-  const [wordList, setWordList] = useState<string[]>(() => shuffleWords(GRE_WORDS, new Set(), new Set()));
+  // Initialize with all words shuffled
+  const [wordList, setWordList] = useState<string[]>(() => {
+    return [...GRE_WORDS].sort(() => Math.random() - 0.5);
+  });
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   
@@ -41,8 +21,9 @@ const App: React.FC = () => {
   // Get word data directly from our database (no API calls needed)
   const currentWordData: WordData | null = WORD_DATA.get(currentWord) || null;
 
-  // Handle "I knew this" - mark as known, remove from unknown
+  // Handle "I knew this" - mark as known, move to next word (increment count)
   const handleKnown = useCallback(() => {
+    // Mark as known
     setKnownWords(prev => new Set(prev).add(currentWord));
     setUnknownWords(prev => {
       const updated = new Set(prev);
@@ -50,21 +31,26 @@ const App: React.FC = () => {
       return updated;
     });
     
-    // Move to next word
+    // Flip card back and move to next word (increment count)
     setIsFlipped(false);
     setTimeout(() => {
       if (currentIndex < wordList.length - 1) {
         setCurrentIndex(prev => prev + 1);
       } else {
         // Reshuffle when reaching the end
-        setWordList(shuffleWords(GRE_WORDS, unknownWords, knownWords));
+        const remainingUnknown = Array.from(unknownWords);
+        const newWords = [...GRE_WORDS]
+          .filter(w => !knownWords.has(w) || unknownWords.has(w))
+          .sort(() => Math.random() - 0.5);
+        setWordList(newWords);
         setCurrentIndex(0);
       }
     }, 200);
-  }, [currentWord, currentIndex, wordList.length, unknownWords, knownWords, shuffleWords]);
+  }, [currentWord, currentIndex, wordList.length, unknownWords, knownWords]);
 
-  // Handle "I didn't know this" - mark as unknown for more practice
+  // Handle "I didn't know this" - don't increment count, schedule to appear after 8 words
   const handleUnknown = useCallback(() => {
+    // Mark as unknown
     setUnknownWords(prev => new Set(prev).add(currentWord));
     setKnownWords(prev => {
       const updated = new Set(prev);
@@ -72,41 +58,27 @@ const App: React.FC = () => {
       return updated;
     });
     
-    // Move to next word and immediately reshuffle to include this word more often
+    // Don't increment currentIndex, but schedule this word to appear after 8 words
     setIsFlipped(false);
     setTimeout(() => {
-      const updatedUnknown = new Set(unknownWords).add(currentWord);
-      const updatedKnown = new Set(knownWords);
-      updatedKnown.delete(currentWord);
+      const newWordList = [...wordList];
       
-      if (currentIndex < wordList.length - 1) {
-        // Reshuffle remaining words to include this word more often
-        const remainingWords = wordList.slice(currentIndex + 1);
-        const newWords = shuffleWords([...remainingWords, currentWord], updatedUnknown, updatedKnown);
-        setWordList([...wordList.slice(0, currentIndex + 1), ...newWords]);
-        setCurrentIndex(prev => prev + 1);
-      } else {
-        // Reshuffle when reaching the end
-        setWordList(shuffleWords(GRE_WORDS, updatedUnknown, updatedKnown));
-        setCurrentIndex(0);
-      }
+      // Remove current word from its position
+      newWordList.splice(currentIndex, 1);
+      
+      // Calculate where to insert it: after 8 other words from current position
+      // After removal, currentIndex now points to the next word
+      // We want to insert after 8 more words, so at currentIndex + 8
+      const insertPosition = Math.min(currentIndex + 8, newWordList.length);
+      
+      // Insert the word at the calculated position
+      newWordList.splice(insertPosition, 0, currentWord);
+      
+      setWordList(newWordList);
+      // Keep currentIndex the same - next word is already at currentIndex after removal
+      // Count doesn't increment because we only count words marked as "I knew this"
     }, 200);
-  }, [currentWord, currentIndex, wordList, unknownWords, knownWords, shuffleWords]);
-
-  // Periodically reshuffle remaining words to include unknown words more frequently
-  // This ensures unknown words appear more often in the remaining deck
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (unknownWords.size > 0 && currentIndex < wordList.length - 5) {
-        // Only reshuffle if we're not near the end, and preserve current position
-        const remainingWords = wordList.slice(currentIndex);
-        const reshuffledRemaining = shuffleWords(remainingWords, unknownWords, knownWords);
-        setWordList([...wordList.slice(0, currentIndex), ...reshuffledRemaining]);
-      }
-    }, 60000); // Check every 60 seconds
-    
-    return () => clearInterval(interval);
-  }, [unknownWords, knownWords, currentIndex, wordList, shuffleWords]);
+  }, [currentWord, currentIndex, wordList]);
 
   const handleNext = () => {
     if (currentIndex < wordList.length - 1) {
@@ -114,7 +86,11 @@ const App: React.FC = () => {
       setTimeout(() => setCurrentIndex(prev => prev + 1), 200);
     } else {
       // Reshuffle when reaching the end
-      setWordList(shuffleWords(GRE_WORDS, unknownWords, knownWords));
+      const remainingUnknown = Array.from(unknownWords);
+      const newWords = [...GRE_WORDS]
+        .filter(w => !knownWords.has(w) || unknownWords.has(w))
+        .sort(() => Math.random() - 0.5);
+      setWordList(newWords);
       setCurrentIndex(0);
       setIsFlipped(false);
     }
@@ -130,7 +106,10 @@ const App: React.FC = () => {
   const handleShuffle = () => {
     setIsFlipped(false);
     setTimeout(() => {
-      setWordList(shuffleWords(GRE_WORDS, unknownWords, knownWords));
+      const newWords = [...GRE_WORDS]
+        .filter(w => !knownWords.has(w) || unknownWords.has(w))
+        .sort(() => Math.random() - 0.5);
+      setWordList(newWords);
       setCurrentIndex(0);
     }, 200);
   };
@@ -138,6 +117,11 @@ const App: React.FC = () => {
   const handleFlip = () => {
     setIsFlipped(!isFlipped);
   };
+
+  // Calculate display - count only increments when words are marked as "I knew this"
+  // Total should always be 100 (total words)
+  const wordsCompleted = knownWords.size;
+  const displayTotal = GRE_WORDS.length;
 
   return (
     // Use h-screen and dvh (dynamic viewport height) for iOS full screen feel
@@ -185,8 +169,8 @@ const App: React.FC = () => {
           onShuffle={handleShuffle}
           onKnown={handleKnown}
           onUnknown={handleUnknown}
-          currentIndex={currentIndex}
-          total={wordList.length}
+          currentIndex={wordsCompleted}
+          total={displayTotal}
           disabled={false}
           showLearningButtons={isFlipped}
         />

@@ -31,7 +31,7 @@ const Controls: React.FC<ControlsProps> = ({
           <button
             onClick={onKnown}
             disabled={disabled}
-            className="flex-1 py-4 px-6 rounded-2xl bg-green-500/20 backdrop-blur-xl border border-green-400/30 text-white font-semibold text-lg shadow-[0_8px_32px_0_rgba(34,197,94,0.2)] hover:bg-green-500/30 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="flex-1 py-4 px-6 rounded-2xl bg-green-500/20 backdrop-blur-xl border border-green-400/30 text-white font-serif font-semibold text-lg shadow-[0_8px_32px_0_rgba(34,197,94,0.2)] hover:bg-green-500/30 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -42,7 +42,7 @@ const Controls: React.FC<ControlsProps> = ({
           <button
             onClick={onUnknown}
             disabled={disabled}
-            className="flex-1 py-4 px-6 rounded-2xl bg-red-500/20 backdrop-blur-xl border border-red-400/30 text-white font-semibold text-lg shadow-[0_8px_32px_0_rgba(239,68,68,0.2)] hover:bg-red-500/30 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="flex-1 py-4 px-6 rounded-2xl bg-red-500/20 backdrop-blur-xl border border-red-400/30 text-white font-serif font-semibold text-lg shadow-[0_8px_32px_0_rgba(239,68,68,0.2)] hover:bg-red-500/30 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
