@@ -33,12 +33,7 @@ const Flashcard: React.FC<FlashcardProps> = ({ word, data, isFlipped, isLoading,
              {/* Decorative circles */}
              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl"></div>
 
-            {isLoading ? (
-              <div className="flex flex-col items-center space-y-4">
-                <div className="w-8 h-8 border-4 border-t-white border-white/20 rounded-full animate-spin"></div>
-                <p className="text-white/70 font-light">Consulting Gemini...</p>
-              </div>
-            ) : data ? (
+            {data ? (
               <div className="z-10 text-center flex flex-col h-full justify-center">
                 <div className="mb-2">
                    <h3 className="text-3xl font-serif font-bold text-white mb-1">{data.word}</h3>

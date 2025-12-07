@@ -1,60 +1,122 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Flashcard from './components/Flashcard';
 import Controls from './components/Controls';
-import { GRE_WORDS } from './constants';
-import { fetchWordDetails } from './services/geminiService';
+import { GRE_WORDS, WORD_DATA } from './constants';
 import { WordData } from './types';
 
+// Shuffle words with priority for unknown words
+const shuffleWords = (allWords: string[], unknown: Set<string>, known: Set<string>): string[] => {
+    const unknownList = allWords.filter(w => unknown.has(w));
+    const knownList = allWords.filter(w => known.has(w) && !unknown.has(w));
+    const neutralList = allWords.filter(w => !unknown.has(w) && !known.has(w));
+    
+    // Unknown words appear 3x more frequently than known/neutral words
+    const weightedUnknown = [...unknownList, ...unknownList, ...unknownList];
+    const combined = [...weightedUnknown, ...neutralList, ...knownList];
+    
+    // Shuffle the combined array
+    const shuffled = [...combined].sort(() => Math.random() - 0.5);
+    
+    // If we have very few words, make sure we have enough variety
+    if (shuffled.length < allWords.length) {
+      const remaining = allWords.filter(w => !shuffled.includes(w));
+      shuffled.push(...remaining);
+    }
+    
+    return shuffled.length > 0 ? shuffled : [...allWords].sort(() => Math.random() - 0.5);
+};
+
 const App: React.FC = () => {
-  // Use a shuffled copy of words or the original list
-  const [wordList, setWordList] = useState<string[]>(GRE_WORDS);
+  // Track words the user doesn't know (need more practice)
+  const [unknownWords, setUnknownWords] = useState<Set<string>>(new Set());
+  const [knownWords, setKnownWords] = useState<Set<string>>(new Set());
+  
+  // Use a shuffled copy of words with smart repetition
+  const [wordList, setWordList] = useState<string[]>(() => shuffleWords(GRE_WORDS, new Set(), new Set()));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   
-  // Cache fetched word data to minimize API calls
-  const [cache, setCache] = useState<Map<string, WordData>>(new Map());
-
-  // Refs to handle strict mode double-invocations or race conditions
   const currentWord = wordList[currentIndex];
 
-  const loadWordData = useCallback(async (word: string) => {
-    if (cache.has(word)) return;
+  // Get word data directly from our database (no API calls needed)
+  const currentWordData: WordData | null = WORD_DATA.get(currentWord) || null;
 
-    setIsLoading(true);
-    const data = await fetchWordDetails(word);
+  // Handle "I knew this" - mark as known, remove from unknown
+  const handleKnown = useCallback(() => {
+    setKnownWords(prev => new Set(prev).add(currentWord));
+    setUnknownWords(prev => {
+      const updated = new Set(prev);
+      updated.delete(currentWord);
+      return updated;
+    });
     
-    if (data) {
-      setCache(prev => new Map(prev).set(word, data));
-    }
-    setIsLoading(false);
-  }, [cache]);
+    // Move to next word
+    setIsFlipped(false);
+    setTimeout(() => {
+      if (currentIndex < wordList.length - 1) {
+        setCurrentIndex(prev => prev + 1);
+      } else {
+        // Reshuffle when reaching the end
+        setWordList(shuffleWords(GRE_WORDS, unknownWords, knownWords));
+        setCurrentIndex(0);
+      }
+    }, 200);
+  }, [currentWord, currentIndex, wordList.length, unknownWords, knownWords, shuffleWords]);
 
-  // Load data when flipped if not already loaded
-  useEffect(() => {
-    if (isFlipped && !cache.has(currentWord)) {
-      loadWordData(currentWord);
-    }
-  }, [isFlipped, currentWord, cache, loadWordData]);
+  // Handle "I didn't know this" - mark as unknown for more practice
+  const handleUnknown = useCallback(() => {
+    setUnknownWords(prev => new Set(prev).add(currentWord));
+    setKnownWords(prev => {
+      const updated = new Set(prev);
+      updated.delete(currentWord);
+      return updated;
+    });
+    
+    // Move to next word and immediately reshuffle to include this word more often
+    setIsFlipped(false);
+    setTimeout(() => {
+      const updatedUnknown = new Set(unknownWords).add(currentWord);
+      const updatedKnown = new Set(knownWords);
+      updatedKnown.delete(currentWord);
+      
+      if (currentIndex < wordList.length - 1) {
+        // Reshuffle remaining words to include this word more often
+        const remainingWords = wordList.slice(currentIndex + 1);
+        const newWords = shuffleWords([...remainingWords, currentWord], updatedUnknown, updatedKnown);
+        setWordList([...wordList.slice(0, currentIndex + 1), ...newWords]);
+        setCurrentIndex(prev => prev + 1);
+      } else {
+        // Reshuffle when reaching the end
+        setWordList(shuffleWords(GRE_WORDS, updatedUnknown, updatedKnown));
+        setCurrentIndex(0);
+      }
+    }, 200);
+  }, [currentWord, currentIndex, wordList, unknownWords, knownWords, shuffleWords]);
 
-  // Prefetch next word for smoother UX
+  // Periodically reshuffle remaining words to include unknown words more frequently
+  // This ensures unknown words appear more often in the remaining deck
   useEffect(() => {
-    const nextWord = wordList[currentIndex + 1];
-    if (nextWord && !cache.has(nextWord)) {
-      // Small delay to prioritize current UI interaction
-      const timer = setTimeout(() => {
-        fetchWordDetails(nextWord).then(data => {
-            if (data) setCache(prev => new Map(prev).set(nextWord, data));
-        });
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [currentIndex, wordList, cache]);
+    const interval = setInterval(() => {
+      if (unknownWords.size > 0 && currentIndex < wordList.length - 5) {
+        // Only reshuffle if we're not near the end, and preserve current position
+        const remainingWords = wordList.slice(currentIndex);
+        const reshuffledRemaining = shuffleWords(remainingWords, unknownWords, knownWords);
+        setWordList([...wordList.slice(0, currentIndex), ...reshuffledRemaining]);
+      }
+    }, 60000); // Check every 60 seconds
+    
+    return () => clearInterval(interval);
+  }, [unknownWords, knownWords, currentIndex, wordList, shuffleWords]);
 
   const handleNext = () => {
     if (currentIndex < wordList.length - 1) {
       setIsFlipped(false);
-      setTimeout(() => setCurrentIndex(prev => prev + 1), 200); // Wait for flip back
+      setTimeout(() => setCurrentIndex(prev => prev + 1), 200);
+    } else {
+      // Reshuffle when reaching the end
+      setWordList(shuffleWords(GRE_WORDS, unknownWords, knownWords));
+      setCurrentIndex(0);
+      setIsFlipped(false);
     }
   };
 
@@ -68,8 +130,7 @@ const App: React.FC = () => {
   const handleShuffle = () => {
     setIsFlipped(false);
     setTimeout(() => {
-      const shuffled = [...GRE_WORDS].sort(() => Math.random() - 0.5);
-      setWordList(shuffled);
+      setWordList(shuffleWords(GRE_WORDS, unknownWords, knownWords));
       setCurrentIndex(0);
     }, 200);
   };
@@ -106,20 +167,15 @@ const App: React.FC = () => {
             </svg>
             <h1 className="text-3xl font-bold font-serif text-transparent bg-clip-text bg-gradient-to-br from-white to-white/70 tracking-tight lowercase">gre vocab</h1>
         </div>
-        {!process.env.API_KEY && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-200 px-3 py-1 rounded-full text-xs backdrop-blur-md">
-                API Key Missing
-            </div>
-        )}
       </header>
 
       {/* Main Content */}
       <main className="z-10 flex flex-col items-center w-full max-w-lg">
         <Flashcard 
           word={currentWord} 
-          data={cache.get(currentWord) || null} 
+          data={currentWordData} 
           isFlipped={isFlipped}
-          isLoading={isLoading && isFlipped && !cache.has(currentWord)}
+          isLoading={false}
           onFlip={handleFlip}
         />
         
@@ -127,15 +183,14 @@ const App: React.FC = () => {
           onNext={handleNext}
           onPrev={handlePrev}
           onShuffle={handleShuffle}
+          onKnown={handleKnown}
+          onUnknown={handleUnknown}
           currentIndex={currentIndex}
           total={wordList.length}
-          disabled={isLoading && isFlipped && !cache.has(currentWord)}
+          disabled={false}
+          showLearningButtons={isFlipped}
         />
       </main>
-
-      <footer className="absolute bottom-4 pb-[env(safe-area-inset-bottom)] text-white/20 text-xs text-center z-10">
-        Powered by Google Gemini 2.5 Flash
-      </footer>
     </div>
   );
 };

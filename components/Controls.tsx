@@ -4,14 +4,54 @@ interface ControlsProps {
   onNext: () => void;
   onPrev: () => void;
   onShuffle: () => void;
+  onKnown: () => void;
+  onUnknown: () => void;
   currentIndex: number;
   total: number;
   disabled: boolean;
+  showLearningButtons: boolean;
 }
 
-const Controls: React.FC<ControlsProps> = ({ onNext, onPrev, onShuffle, currentIndex, total, disabled }) => {
+const Controls: React.FC<ControlsProps> = ({ 
+  onNext, 
+  onPrev, 
+  onShuffle, 
+  onKnown,
+  onUnknown,
+  currentIndex, 
+  total, 
+  disabled,
+  showLearningButtons 
+}) => {
   return (
     <div className="flex flex-col items-center gap-4 mt-8 w-full max-w-md z-10">
+      {/* Learning Buttons - Only show when card is flipped */}
+      {showLearningButtons && (
+        <div className="flex gap-4 w-full">
+          <button
+            onClick={onKnown}
+            disabled={disabled}
+            className="flex-1 py-4 px-6 rounded-2xl bg-green-500/20 backdrop-blur-xl border border-green-400/30 text-white font-semibold text-lg shadow-[0_8px_32px_0_rgba(34,197,94,0.2)] hover:bg-green-500/30 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            I knew this
+          </button>
+          
+          <button
+            onClick={onUnknown}
+            disabled={disabled}
+            className="flex-1 py-4 px-6 rounded-2xl bg-red-500/20 backdrop-blur-xl border border-red-400/30 text-white font-semibold text-lg shadow-[0_8px_32px_0_rgba(239,68,68,0.2)] hover:bg-red-500/30 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            I didn't know this
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between w-full bg-black/20 backdrop-blur-md rounded-full p-2 border border-white/10">
         <button
           onClick={onPrev}
