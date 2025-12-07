@@ -24,12 +24,26 @@ const App: React.FC = () => {
   // Handle "I knew this" - mark as known, move to next word (increment count)
   const handleKnown = useCallback(() => {
     // Mark as known
-    setKnownWords(prev => new Set(prev).add(currentWord));
-    setUnknownWords(prev => {
-      const updated = new Set(prev);
-      updated.delete(currentWord);
-      return updated;
-    });
+    const updatedKnownWords = new Set(knownWords).add(currentWord);
+    const updatedUnknownWords = new Set(unknownWords);
+    updatedUnknownWords.delete(currentWord);
+    
+    setKnownWords(updatedKnownWords);
+    setUnknownWords(updatedUnknownWords);
+    
+    // Check if all words are completed (all 100 words are known)
+    if (updatedKnownWords.size >= GRE_WORDS.length) {
+      // Reset everything: clear known/unknown, reshuffle all words, restart count from 1
+      setIsFlipped(false);
+      setTimeout(() => {
+        const allWordsShuffled = [...GRE_WORDS].sort(() => Math.random() - 0.5);
+        setWordList(allWordsShuffled);
+        setKnownWords(new Set());
+        setUnknownWords(new Set());
+        setCurrentIndex(0);
+      }, 200);
+      return;
+    }
     
     // Flip card back and move to next word (increment count)
     setIsFlipped(false);
@@ -37,10 +51,9 @@ const App: React.FC = () => {
       if (currentIndex < wordList.length - 1) {
         setCurrentIndex(prev => prev + 1);
       } else {
-        // Reshuffle when reaching the end
-        const remainingUnknown = Array.from(unknownWords);
+        // Reshuffle when reaching the end (but not all words are known yet)
         const newWords = [...GRE_WORDS]
-          .filter(w => !knownWords.has(w) || unknownWords.has(w))
+          .filter(w => !updatedKnownWords.has(w) || updatedUnknownWords.has(w))
           .sort(() => Math.random() - 0.5);
         setWordList(newWords);
         setCurrentIndex(0);
@@ -153,8 +166,8 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="z-10 flex flex-col items-center w-full max-w-lg">
+      {/* Main Content - Added top margin to prevent overlap with header when card flips */}
+      <main className="z-10 flex flex-col items-center w-full max-w-lg mt-20 md:mt-24">
         <Flashcard 
           word={currentWord} 
           data={currentWordData} 
